@@ -6,7 +6,7 @@ pipeline {
             steps {
                 echo 'Pulling from GitHub..'
                 sh 'git init'
-                sh 'git add remote origin https://github.com/Frelaxy/RailsNginxPostgresInDockerAndKubernetes'
+                sh 'git remote add origin https://github.com/Frelaxy/RailsNginxPostgresInDockerAndKubernetes'
                 sh 'git pull origin main'
             }
         }
