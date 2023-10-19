@@ -2,6 +2,14 @@ pipeline {
     agent any
 
     stages {
+        stage('Pull from GitHub..') {
+            steps {
+                echo 'Pulling from GitHub..'
+                sh 'git init'
+                sh 'git add remote origin https://github.com/Frelaxy/RailsNginxPostgresInDockerAndKubernetes'
+                sh 'git pull origin main'
+            }
+        }
         stage('Build') {
             steps {
                 echo 'Building application..'
@@ -33,6 +41,7 @@ pipeline {
         stage('Delete pipline artifacts..') {
             steps {
                 echo 'Deleting images...'
+                sh 'docker-compose down'
                 sh 'docker rmi frelaxy/app:latest frelaxy/database:latest frelaxy/nginx:latest'
             }
         }
