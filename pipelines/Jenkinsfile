@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     stages {
-        stage('Pull from GitHub..') {
+        stage('Pull') {
             steps {
                 echo 'Pulling from GitHub..'
                 sh 'git init'
@@ -14,12 +14,8 @@ pipeline {
             steps {
                 echo 'Building application..'
                 sh 'docker build -t frelaxy/app:latest -f docker/app/Dockerfile .'
-            }
-            steps {
                 echo 'Building database..'
                 sh 'docker build -t frelaxy/database:latest -f docker/database/Dockerfile .'
-            }
-            steps {
                 echo 'Building nginx..'
                 sh 'docker build -t frelaxy/nginx:latest -f docker/nginx/Dockerfile .'
             }
