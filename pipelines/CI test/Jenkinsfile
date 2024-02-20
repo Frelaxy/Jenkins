@@ -2,14 +2,25 @@ pipeline {
     agent any
 
     stages {
+        stage('Prepare'){
+            steps {
+                git(
+                    url: "git@github.com:Frelaxy/RailsNginxPostgresInDockerAndKubernetes.git",
+                    branch: "main",
+                    credentialsId: "REPO_CREDENTIAL_ID_IN_JENKINS",
+                    changelog: true,
+                    poll: true
+                )
+            }
+        }
         stage('Build') {
             steps {
                 echo 'Building application..'
-                sh 'docker build -t frelaxy/app:latest -f docker/app/Dockerfile .'
+                sh 'docker build -t frelaxy/app:latest -f app/Dockerfile .'
                 echo 'Building database..'
-                sh 'docker build -t frelaxy/database:latest -f docker/database/Dockerfile .'
+                sh 'docker build -t frelaxy/database:latest -f database/Dockerfile .'
                 echo 'Building nginx..'
-                sh 'docker build -t frelaxy/nginx:latest -f docker/nginx/Dockerfile .'
+                sh 'docker build -t frelaxy/nginx:latest -f nginx/Dockerfile .'
             }
         }
         stage('Test') {

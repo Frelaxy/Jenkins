@@ -1,0 +1,123 @@
+- name: Deploy support | prepare
+  hosts: localhost
+  gather_facts: no
+  tags: prepare
+  tasks:
+    - name: get timestamp
+      shell: date +"%s"
+      args:
+        executable: /bin/bash
+      register: deploy_timestamp
+      when: deploy_id is undefined
+    - name: set deploy id
+      set_fact:
+        deploy_id: "{{ deploy_timestamp.stdout }}"
+      when: deploy_id is undefined
+    - name: print deploy id
+      debug:
+        var: deploy_id
+
+- name: Deploy support | change version
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  tasks:
+    - name: change image tag in .env
+      replace:
+        path: "{{ ansible_customer_dir }}/components/{{ component }}/.env"
+        regexp:  '(\w+_IMAGE_TAG=)(.*)'
+        replace: '\1{{ version }}'
+
+- name: Deploy support | sync configuration
+  hosts: support
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  tasks:
+    - name: rsync compose configs
+      ansible.posix.synchronize:
+        src: "{{ ansible_customer_dir }}/components/{{ component }}/"
+        dest: "{{ compose_path }}"
+
+- name: Deploy support scripts | pull support scripts
+  hosts: support
+  gather_facts: no
+  tags: [never, sync_scripts]
+  vars_files:
+    - ./support_vars.yml
+  tasks:
+    - name: Pull support scripts from git
+      git:
+        repo: "{{ support_scripts_repo }}"
+        dest: "{{ support_scripts_path }}"
+        single_branch: yes
+        version: master
+        ignore_errors: yes
+
+- name: Deploy support | pull compose services
+  hosts: support
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  vars:
+    compose_service: "{{ item }}"
+  tasks:
+    - name: include compose shared tasks (pull)
+      include_tasks: "{{ shared_tasks_path }}/pull_image.yml"
+      loop: "{{ compose_services }}"
+
+- name: Deploy support | stop compose services
+  hosts: support
+  serial: 1
+  tags: [never, stop]
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  vars:
+    compose_service: "{{ item }}"
+  tasks:
+    - name: include compose shared tasks (stop)
+      include_tasks: "{{ shared_tasks_path }}/stop_compose_service.yml"
+      loop: "{{ compose_services }}"
+
+- name: Deploy support | stop all compose services
+  hosts: support
+  serial: 1
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  tasks:
+    - name: Stop all compose services by id
+      shell: docker container stop $(docker compose ps -qa)
+      args:
+        executable: /bin/bash
+        chdir: "{{ compose_path }}"
+
+- name: Deploy support | up compose services
+  hosts: support
+  serial: 1
+  tags: up
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  vars:
+    compose_service: "{{ item }}"
+  tasks:
+    - name: include compose shared tasks (up)
+      include_tasks: "{{ shared_tasks_path }}/up_compose_service.yml"
+      loop: "{{ compose_services }}"
+
+- name: Deploy support | rm stopped compose services
+  hosts: support
+  serial: 1
+  tags: [never, rm_stopped]
+  gather_facts: no
+  vars_files:
+    - ./support_vars.yml
+  vars:
+    compose_service: "{{ item }}"
+  tasks:
+    - name: include compose shared tasks (rm)
+      include_tasks: "{{ shared_tasks_path }}/rm_stopped_compose_service.yml"
+      loop: "{{ compose_services }}"

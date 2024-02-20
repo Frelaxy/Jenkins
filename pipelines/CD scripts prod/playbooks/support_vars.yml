@@ -1,0 +1,6 @@
+component: support
+compose_services: ['core']
+compose_path: "{{ ap.components_path | default('/activeplatform/components') }}/support"
+shared_tasks_path: "shared_tasks"
+support_scripts_repo: git@gitlab.activeplatform.com:support/support_scripts.git
+support_scripts_path: "//home/{{ vm_default_user }}/support/support_scripts"
