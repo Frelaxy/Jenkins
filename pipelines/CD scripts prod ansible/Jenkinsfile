@@ -2,17 +2,11 @@ pipeline {
     agent {
         label "mgmt"
     }
-    parameters {
-        string name: 'CUSTOMER', defaultValue: '', trim: true, description: "Please set customer."
-        string name: 'ENVIRONMENT', defaultValue: '', trim: true, description: "Please set customer environment."
-        string name: 'PROVIDER', defaultValue: '', trim: true, description: "Please set provider."
-        string name: 'VERSION', defaultValue: '', trim: true, description: "Please set version."
-        string name: 'DEPLOY_ID', defaultValue: BUILD_TIMESTAMP, trim: true, description: "Don't change please!"
-    }
     environment {
         COMPONENT = "support"
-        INVENTORY_DIR = "/home/active/mgmt/ansible/customers/$CUSTOMER/$ENVIRONMENT/$PROVIDER/ansible/inventory/"
-        AP_CONFIG_FILE = "/home/active/mgmt/ansible/customers/$CUSTOMER/$ENVIRONMENT/$PROVIDER/ansible/inventory/group_vars/all/ap.yml"
+        VERSION = "master"
+        DEPLOY_ID = "${BUILD_TIMESTAMP}"
+        CUSTOMERS_DIRECTORY = "/home/active/mgmt/ansible/customers"
         PYENV_VERSION = "3.8.3"
         PYENV_ROOT = "/home/active/.pyenv"
         PATH = "$PYENV_ROOT/bin:$PATH"
@@ -22,18 +16,60 @@ pipeline {
         buildDiscarder logRotator(artifactDaysToKeepStr: '1', artifactNumToKeepStr: '', daysToKeepStr: '31', numToKeepStr: '')
     }
     stages {
-        stage('Deploy scripts') {
+        stage('Prepare') {
             steps {
-                print("INFO: Deploy - ${COMPONENT} scripts.")
+                checkout scmGit(
+                    branches: [[name: '*/master']],
+                    extensions: [
+                        [$class: 'RelativeTargetDirectory', relativeTargetDir: 'support_deploy'],
+                        cloneOption(honorRefspec: true, noTags: false, reference: '', shallow: false),
+                        localBranch('master'),
+                        cleanBeforeCheckout(deleteUntrackedNestedRepositories: true),
+                        pruneTags(true),
+                        pruneStaleBranch()
+                    ],
+                    userRemoteConfigs: [[
+                        credentialsId:  'auto_ssh',
+                        url: 'git@gitlab.activeplatform.com:devops/deploy/components/support.git'
+                    ]]
+                )
+            }
+        }
+        stage('Deploy scripts.') {
+            steps {
+                print("INFO: Deploy - ${COMPONENT} scripts for noventiq installation.")
+                script {
+                    env.SOFLINE_INVENTORY_PATH = "softline/production/ya/ansible/inventory"
+                    env.INVENTORY_DIR = "${CUSTOMERS_DIRECTORY}/${SOFLINE_INVENTORY_PATH}"
+                    env.AP_CONFIG_FILE = "${INVENTORY_DIR}/group_vars/all/ap.yml"
+                    ap_config = readYaml file: "${AP_CONFIG_FILE}"
+                }
                 withCredentials([sshUserPrivateKey(credentialsId: ap_config['jenkins_deploy_credentials'], keyFileVariable: 'DEPLOY_KEY_PATH', usernameVariable: 'DEPLOY_USER')]) {
                     sh '''
                         set +x
                         eval "$(pyenv init -)"
                         set -x
 
-                        ansible-playbook --private-key=${DEPLOY_KEY_PATH} --tags "sync_scripts" -i ${INVENTORY_DIR} -e "version=${VERSION} deploy_id=${DEPLOY_ID}" playbooks/${COMPONENT}.yml
+                        ansible-playbook --private-key=${DEPLOY_KEY_PATH} --tags "sync_scripts" -i ${INVENTORY_DIR} -e "version=${VERSION} deploy_id=${DEPLOY_ID}" support_deploy/playbooks/${COMPONENT}.yml
                     '''
                 }
+                
+                print("INFO: Deploy - ${COMPONENT} scripts for noventiq installation.")
+                script {
+                    env.NOVENTIQ_INVENTORY_PATH = "noventiq/production/aws/ansible/inventory"
+                    env.INVENTORY_DIR = "${CUSTOMERS_DIRECTORY}/${NOVENTIQ_INVENTORY_PATH}"
+                    env.AP_CONFIG_FILE = "${INVENTORY_DIR}/group_vars/all/ap.yml"
+                    ap_config = readYaml file: "${AP_CONFIG_FILE}"
+                }   
+                withCredentials([sshUserPrivateKey(credentialsId: ap_config['jenkins_deploy_credentials'], keyFileVariable: 'DEPLOY_KEY_PATH', usernameVariable: 'DEPLOY_USER')]) {
+                    sh '''
+                        set +x
+                        eval "$(pyenv init -)"
+                        set -x
+
+                        ansible-playbook --private-key=${DEPLOY_KEY_PATH} --tags "sync_scripts" -i ${INVENTORY_DIR} -e "version=${VERSION} deploy_id=${DEPLOY_ID}" support_deploy/playbooks/${COMPONENT}.yml
+                    '''
+                }  
             }
         }
     }
